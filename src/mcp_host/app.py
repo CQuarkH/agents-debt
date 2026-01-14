@@ -1,88 +1,78 @@
 import asyncio
-import os
 import sys
+import os
+import json
 from pathlib import Path
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from anthropic import Anthropic
+from steering.context_debt import ContextDebtPolicy
 
-
-from steering import build_context_debt_prompt
-
-# =============================================================================
 # SETUP
-# =============================================================================
-API_KEY = os.environ.get("ANTHROPIC_API_KEY") 
 
-if not API_KEY:
-    print("❌ Error: ANTHROPIC_API_KEY environment variable not found")
-    sys.exit(1)
-    
-    
+API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 CURRENT_DIR = Path(__file__).parent
 SERVER_SCRIPT = CURRENT_DIR.parent / "mcp_server" / "server.py"
 
 server_params = StdioServerParameters(
-    command=sys.executable, 
-    args=[str(SERVER_SCRIPT)], 
+    command=sys.executable,
+    args=[str(SERVER_SCRIPT)],
     env=None
 )
 
 async def main():
-    print("🚀 STARTING CONTEXT DEBT ANALYSIS SYSTEM (HOST)")
-    print("==============================================")
-
-    # 1. Connection to MCP Server (Data Layer)
+    print("🚀 HOST: Initializing Context Debt Analysis...")
+    
     async with stdio_client(server_params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
-            print("✅ Connection with MCP Server established.")
-
-            # 2. Context Extraction (Consumption of Resources)
-            print("📥 Fetching Resources from Server...")
             
-            # Fetch Reality
+            # 1. INGESTION
+            print("📥 HOST: Fetching Domain Model & Intent...")
+            
+            # Get the Domain Model (The Structured Reality)
             model_res = await session.read_resource("cicd://model")
-            cicd_context = model_res.contents[0].text
-            print("DEBUG: Printing first 500 characters of cicd_context")
-            print(cicd_context[:500])
-            print("--------------------------------------------------")
+            # Parse the JSON to Python Dictionary so constraints.py can work with it
+            domain_model_dict = json.loads(model_res.contents[0].text)
             
-            # Fetch Intent
+            # Get the Intent (The Text)
             try:
                 intent_res = await session.read_resource("intent://agents-md")
-                intent_context = intent_res.contents[0].text
-                print("DEBUG: Printing first 500 characters of intent_context")
-                print(intent_context[:500])
-                print("--------------------------------------------------")
-                
+                intent_text = intent_res.contents[0].text
             except Exception:
-                intent_context = "No agents.md found."
-                print("⚠️ Warning: agents.md not found.")
-                
-            # 3. Steering Layer (MOCK)
-            print("🧠 Applying Steering (Building Prompt)...")
-            final_prompt = build_context_debt_prompt(cicd_context, intent_context)
+                intent_text = "No documentation found."
 
-            # 4. Inference Layer (Call to Anthropic)
-            print("🤖 Calling Claude Sonnet 4.5...")
+            # 2. STEERING (Apply the Policy)
+            print("🧠 HOST: Applying Steering Policy (Defining Structural Boundaries)...")
+            
+            # Instantiate the specific policy
+            policy = ContextDebtPolicy()
+            
+            # Generate the final Prompt based on constraints
+            final_prompt = policy.assemble_prompt(
+                domain_model=domain_model_dict, 
+                intent_context=intent_text
+            )
+            
+            # (Optional) Debug: View generated constraints
+            # print(policy.compute_constraints(domain_model_dict))
+
+            # 3. INFERENCE (LLM Execution)
+            print("🤖 HOST: Sending constrained task to LLM...")
             client = Anthropic(api_key=API_KEY)
             
             message = client.messages.create(
                 model="claude-sonnet-4-5",
-                max_tokens=1000,
-                temperature=0,
-                system="You are a static context debt analyzer. You must be precise and concise without being overly verbose and WITHOUT ADDING INFORMATION that is not provided by the CONTEXT.",
-                messages=[
-                    {"role": "user", "content": final_prompt}
-                ]
+                max_tokens=1500,
+                temperature=0, # Temperature 0 is vital for strict compliance tasks
+                messages=[{"role": "user", "content": final_prompt}]
             )
 
-            # 5. Presentation Layer
-            print("\n📊 CONTEXT DEBT REPORT GENERATED:")
-            print("==================================")
+            print("\n" + "="*50)
+            print("📊 CONTEXT DEBT SMELLS REPORT")
+            print("="*50)
             print(message.content[0].text)
-            print("==================================")
 
 if __name__ == "__main__":
     asyncio.run(main())
