@@ -2,157 +2,197 @@ from __future__ import annotations
 from typing import List, Dict, Optional, Union, Any
 from pydantic import BaseModel, Field, ConfigDict
 
+# =============================================================================
+# GITHUB ACTIONS DOMAIN MODEL
+# Main Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+# =============================================================================
+
 # ---------------------------------------------------------
-# 1. Definición de Pasos (Steps)
+# 1. Step Definition
 # ---------------------------------------------------------
 class Step(BaseModel):
     """
-    Representa una tarea individual secuencial dentro de un Job.
-    Según la doc: Un step puede ejecutar comandos, tareas de configuración
-    o una acción de su repositorio, un repositorio público o una imagen Docker.
+    Represents an individual task within a Job.
+    
+    A step is an individual task that can run commands in a job. A step can be either
+    a shell command or an action definition.
+    
+    Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idsteps
     """
     model_config = ConfigDict(populate_by_name=True)
 
-    # El nombre que se muestra en la interfaz de usuario de GitHub Actions para este paso.
+    # The name that is displayed in the GitHub Actions UI for this step.
     name: Optional[str] = None
     
-    # Un identificador único para el paso. Permite referenciarlo en contextos 
-    # (ej: steps.<id>.outputs).
+    # A unique identifier for the step. Allows referencing it in contexts 
+    # (e.g., steps.<id>.outputs).
     id: Optional[str] = None
     
-    # Expresión condicional. El paso solo se ejecutará si esta condición se evalúa como verdadera.
-    # Docs: "You can use the if conditional to prevent a step from running unless a condition is met."
+    # Conditional expression. The step will only run if this condition evaluates to true.
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsif
     if_condition: Optional[str] = Field(default=None, alias="if") 
     
-    # Selecciona una acción para ejecutar como parte de un paso en su trabajo. 
-    # Es mutuamente excluyente con 'run'.
-    # Ejemplo: actions/checkout@v4
+    # Selects an action to run as part of a step in your job. 
+    # Mutually exclusive with 'run'.
+    # Example: actions/checkout@v4
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsuses
     uses: Optional[str] = None
     
-    # Ejecuta programas de línea de comandos usando el shell del sistema operativo.
-    # Es mutuamente excluyente con 'uses'.
+    # Runs command-line programs using the operating system's shell.
+    # Mutually exclusive with 'uses'.
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstepsrun
     run: Optional[str] = None
     
-    # Especifica el directorio de trabajo donde se ejecutará el comando 'run'.
-    # Si no se define, usa el default del job.
+    # Specifies the working directory where the 'run' command will be executed.
+    # If not defined, it uses the job's default.
     working_directory: Optional[str] = Field(default=None, alias="working-directory")
     
-    # Permite anular la configuración de shell predeterminada en el sistema operativo del ejecutor.
-    # Ejemplo: 'bash', 'pwsh', 'python'.
+    # Allows overriding the default shell configuration in the runner's operating system.
+    # Example: 'bash', 'pwsh', 'python'.
     shell: Optional[str] = None
     
-    # Un mapa de parámetros de entrada exigidos por la acción definida en 'uses'.
-    # Docs: "A map of the input parameters defined by the action."
+    # A map of the input parameters required by the action defined in 'uses'.
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstepswith
     with_args: Optional[Dict[str, Any]] = Field(default=None, alias="with") 
     
-    # Establece variables de entorno disponibles solo para este paso.
+    # Sets environment variables available only for this step.
     env: Optional[Dict[str, Union[str, int, bool]]] = None
     
-    # Evita que el trabajo falle si este paso falla. 
-    # Si es true, el trabajo continúa al siguiente paso incluso si este devuelve error.
+    # Prevents the job from failing if this step fails. 
+    # If true, the job continues to the next step even if this one returns an error.
     continue_on_error: Optional[bool] = Field(default=False, alias="continue-on-error")
     
-    # El número máximo de minutos para ejecutar el paso antes de matar el proceso.
+    # The maximum number of minutes to run the step before killing the process.
     timeout_minutes: Optional[int] = Field(default=None, alias="timeout-minutes")
 
 
 # ---------------------------------------------------------
-# 2. Definición de Trabajos (Jobs)
+# 2. Job Definition
 # ---------------------------------------------------------
 class Job(BaseModel):
     """
-    Representa un conjunto de pasos que se ejecutan en el mismo ejecutor (runner).
-    Los jobs se ejecutan en paralelo por defecto, a menos que se use 'needs'.
+    Represents a set of steps that execute on the same runner.
+    Jobs run in parallel by default, unless 'needs' is used.
+    
+    Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobs
     """
     model_config = ConfigDict(populate_by_name=True)
 
-    # El nombre del trabajo que se muestra en la interfaz de GitHub.
+    # The name of the job displayed on GitHub.
     name: Optional[str] = None
     
-    # Identifica cualquier trabajo que deba completarse satisfactoriamente antes de que este trabajo se ejecute.
-    # Crea dependencias secuenciales entre jobs.
+    # Identifies any jobs that must complete successfully before this job will run.
+    # Creates sequential dependencies between jobs.
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idneeds
     needs: Optional[Union[str, List[str]]] = None 
     
-    # Define el tipo de máquina en la que se ejecutará el trabajo.
-    # Ejemplo: "ubuntu-latest", "windows-2019", o etiquetas de self-hosted.
+    # Defines the type of machine to run the job on.
+    # Example: "ubuntu-latest", "windows-2019", or self-hosted tags.
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idruns-on
     runs_on: Union[str, List[str]] = Field(alias="runs-on")
     
-    # Modifica los permisos predeterminados otorgados al GITHUB_TOKEN para este trabajo.
-    # Puede ser 'read-all', 'write-all' o un diccionario específico.
+    # Modifies the default permissions granted to the GITHUB_TOKEN for this job.
     permissions: Optional[Union[str, Dict[str, str]]] = None
     
-    # Define el nombre del entorno (environment) al que hace referencia el trabajo.
-    # Se usa para reglas de protección y secretos específicos de entorno (ej: 'production').
+    # Defines the environment that the job references.
+    # Used for protection rules and environment-specific secrets (e.g., 'production').
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idenvironment
     environment: Optional[Union[str, Dict[str, Any]]] = None
     
-    # Un mapa de salidas (outputs) generadas por este job que estarán disponibles para 
-    # otros jobs que dependan de este.
+    # A map of outputs generated by this job that will be available to 
+    # other jobs that depend on this one.
     outputs: Optional[Dict[str, str]] = None
     
-    # Variables de entorno disponibles para todos los pasos del trabajo.
+    # Environment variables available for all steps in the job.
     env: Optional[Dict[str, Union[str, int, bool]]] = None
     
-    # Configuración predeterminada que se aplicará a todos los pasos del trabajo.
-    # Comúnmente usado para definir un 'shell' o 'working-directory' global para el job.
+    # Default configuration that will apply to all steps in the job.
     defaults: Optional[Dict[str, Any]] = None
     
-    # Condicional para evitar que el trabajo se ejecute a menos que se cumpla la condición.
+    # Conditional to prevent the job from running unless the condition is met.
     if_condition: Optional[str] = Field(default=None, alias="if")
     
-    # La lista de pasos (tareas) que componen el trabajo.
+    # The list of steps (tasks) that make up the job.
     steps: List[Step] = []
     
-    # Crea una matriz de compilación para ejecutar trabajos en múltiples variaciones simultáneamente.
-    # (Ej: ejecutar tests en node 14, 16 y 18).
+    # A matrix strategy allows creating multiple job runs based on variable combinations.
+    # Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#jobsjob_idstrategy
     strategy: Optional[Dict[str, Any]] = None 
     
-    # Asegura que solo se ejecute un trabajo o flujo de trabajo a la vez en el mismo grupo de concurrencia.
-    # Útil para evitar condiciones de carrera o despliegues solapados.
+    # Ensures that only a single job or workflow runs at a time in the same concurrency group.
     concurrency: Optional[Union[str, Dict[str, Any]]] = None
     
-    # Contenedores de servicios (como Redis, Postgres) para alojar servicios necesarios para el trabajo.
-    # GitHub crea una red Docker bridge para comunicar el runner con estos servicios.
+    # Service containers (like Redis, Postgres) to host services needed for the job.
     services: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------
-# 3. Definición de Triggers (On)
+# 3. Trigger Definition (On)
 # ---------------------------------------------------------
-# El atributo 'on' define qué eventos activan el flujo de trabajo.
-# Docs: "To automatically trigger a workflow, use on to define which events cause the workflow to run."
+# The 'on' attribute defines which events trigger the workflow.
+# Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#on
 WorkflowTrigger = Union[str, List[str], Dict[str, Any]]
 
 
 # ---------------------------------------------------------
-# 4. Definición del Workflow (Raíz)
+# 4. Workflow Definition (Root)
 # ---------------------------------------------------------
 class Workflow(BaseModel):
     """
-    Modelo raíz que representa el archivo .yaml completo de configuración de GitHub Actions.
-    Un workflow es un proceso automatizado configurable compuesto por uno o más jobs.
+    Root model representing the entire .yaml configuration file.
+    A workflow is a configurable automated process composed of one or more jobs.
+    
+    Reference: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#about-workflows
     """
     model_config = ConfigDict(populate_by_name=True)
 
-    # El nombre del flujo de trabajo. GitHub muestra este nombre en la pestaña "Actions".
+    # The name of the workflow. GitHub displays this name in the "Actions" tab.
     name: Optional[str] = None
     
-    # El nombre para las ejecuciones de flujo de trabajo generadas desde el flujo de trabajo.
-    # Permite nombres dinámicos usando contextos (ej: 'Deploy to production by @user').
+    # The name for workflow runs generated from the workflow.
+    # Allows dynamic names using contexts.
     run_name: Optional[str] = Field(default=None, alias="run-name")
     
-    # Evento o eventos que desencadenan el flujo de trabajo. OBLIGATORIO.
+    # Event or events that trigger the workflow. REQUIRED.
     on: WorkflowTrigger
     
-    # Modifica los permisos predeterminados del GITHUB_TOKEN para todo el flujo de trabajo.
+    # Modifies the default GITHUB_TOKEN permissions for the entire workflow.
     permissions: Optional[Union[str, Dict[str, str]]] = None
     
-    # Variables de entorno disponibles para todos los jobs y steps en el flujo de trabajo.
+    # Environment variables available to all jobs and steps in the workflow.
     env: Optional[Dict[str, Union[str, int, bool]]] = None
     
-    # Un conjunto de trabajos que ejecuta el flujo de trabajo. OBLIGATORIO.
-    # Se define como diccionario porque en YAML las claves son los IDs de los jobs.
+    # A set of jobs that the workflow executes. REQUIRED.
+    # Defined as a dictionary because in YAML keys are job IDs.
     jobs: Dict[str, Job]
 
-    # Gestión de concurrencia a nivel global del workflow.
-    # Si se define aquí, afecta a todas las ejecuciones de este workflow.
+    # Global concurrency management for the workflow.
     concurrency: Optional[Union[str, Dict[str, Any]]] = None
+
+
+# ---------------------------------------------------------
+# 5. Repository Definition (New Entity)
+# ---------------------------------------------------------
+class Repository(BaseModel):
+    """
+    Represents a code repository (e.g., a project folder or a remote Git repo)
+    that contains a collection of Workflows.
+    
+    This entity serves as a container to facilitate cross-workflow analysis 
+    and consistency checks across the entire project.
+    """
+    # The name or identifier of the repository (e.g., 'owner/repo-name').
+    name: str
+    
+    # Dictionary containing all parsed workflows found in the .github/workflows directory.
+    # Key: The filename (e.g., 'ci.yml').
+    # Value: The parsed Workflow object.
+    workflows: Dict[str, Workflow] = Field(default_factory=dict)
+
+    def total_workflows(self) -> int:
+        """Returns the total number of valid workflows loaded for this repository."""
+        return len(self.workflows)
+
+    def get_workflow_names(self) -> List[str]:
+        """Returns a list of the names of all workflows in the repository."""
+        return [w.name for w in self.workflows.values() if w.name]
